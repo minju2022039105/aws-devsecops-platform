@@ -1,131 +1,50 @@
-# 1. WAF 로그 저장용 S3 (중복 방지를 위해 이름을 고유하게 변경)
 resource "aws_s3_bucket" "waf_logs" {
-  # 버킷 이름을 다른 사용자와 겹치지 않게 'minju-0417-project' 등으로 수정했습니다.
-  bucket        = "aws-waf-logs-minju-0417-project" 
+  bucket        = "aws-waf-logs-minju-0417-project"
   force_destroy = true
 }
 
-# 5단계 보안 규칙이 적용된 Web ACL
-resource "aws_wafv2_web_acl" "main" {
-  name     = "devsecops-advanced-waf"
-  scope    = "REGIONAL"
+# 1. 퍼블릭 액세스 차단 (Result #1, #2, #4, #5, #10 해결)
+resource "aws_s3_bucket_public_access_block" "waf_logs_block" {
+  bucket = aws_s3_bucket.waf_logs.id
 
-  default_action {
-    allow {}
-  }
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
 
-  # Priority 0: Geo-Blocking (한국 전용)
+# 2. 기본 암호화 설정 (Result #3, #6 해결)
+# KMS 키를 사용하여 암호화 (Customer Managed Key 권장 사항 반영)
+resource "aws_kms_key" "waf_s3_key" {
+  description             = "KMS key for WAF S3 bucket encryption"
+  deletion_window_in_days = 7
+  enable_key_rotation     = true
+}
+
+resource "aws_s3_bucket_server_side_encryption_configuration" "waf_logs_encryption" {
+  bucket = aws_s3_bucket.waf_logs.id
+
   rule {
-    name     = "GeoBlockingRule"
-    priority = 0
-    action {
-      block {}
+    apply_server_side_encryption_by_default {
+      kms_master_key_id = aws_kms_key.waf_s3_key.arn
+      sse_algorithm     = "aws:kms"
     }
-    statement {
-      not_statement {
-        statement {
-          geo_match_statement {
-            country_codes = ["KR"]
-          }
-        }
-      }
-    }
-    visibility_config {
-      cloudwatch_metrics_enabled = true
-      metric_name                = "GeoBlockingMetric"
-      sampled_requests_enabled   = true
-    }
-  }
-
-  # Priority 1: SQL Injection (Managed)
-  rule {
-    name     = "AWSManagedRulesSQLi"
-    priority = 1
-    override_action {
-      none {}
-    }
-    statement {
-      managed_rule_group_statement {
-        name        = "AWSManagedRulesSQLiRuleSet"
-        vendor_name = "AWS"
-      }
-    }
-    visibility_config {
-      cloudwatch_metrics_enabled = true
-      metric_name                = "SQLiMetric"
-      sampled_requests_enabled   = true
-    }
-  }
-
-  # Priority 2: Common Attacks (XSS 포함)
-  rule {
-    name     = "AWSManagedRulesCommon"
-    priority = 2
-    override_action {
-      none {}
-    }
-    statement {
-      managed_rule_group_statement {
-        name        = "AWSManagedRulesCommonRuleSet"
-        vendor_name = "AWS"
-      }
-    }
-    visibility_config {
-      cloudwatch_metrics_enabled = true
-      metric_name                = "CommonMetric"
-      sampled_requests_enabled   = true
-    }
-  }
-
-  # Priority 3: Known Bad Inputs
-  rule {
-    name     = "AWSManagedRulesKnownBadInputs"
-    priority = 3
-    override_action {
-      none {}
-    }
-    statement {
-      managed_rule_group_statement {
-        name        = "AWSManagedRulesKnownBadInputsRuleSet"
-        vendor_name = "AWS"
-      }
-    }
-    visibility_config {
-      cloudwatch_metrics_enabled = true
-      metric_name                = "BadInputMetric"
-      sampled_requests_enabled   = true
-    }
-  }
-
-  # Priority 4: IP Reputation (악성 IP 리스트)
-  rule {
-    name     = "AWSManagedRulesAmazonIpReputation"
-    priority = 4
-    override_action {
-      none {}
-    }
-    statement {
-      managed_rule_group_statement {
-        name        = "AWSManagedRulesAmazonIpReputationList"
-        vendor_name = "AWS"
-      }
-    }
-    visibility_config {
-      cloudwatch_metrics_enabled = true
-      metric_name                = "IpReputationMetric"
-      sampled_requests_enabled   = true
-    }
-  }
-
-  visibility_config {
-    cloudwatch_metrics_enabled = true
-    metric_name                = "devsecops-waf-main"
-    sampled_requests_enabled   = true
   }
 }
 
-# 로그 연결
-resource "aws_wafv2_web_acl_logging_configuration" "main" {
-  log_destination_configs = [aws_s3_bucket.waf_logs.arn]
-  resource_arn            = aws_wafv2_web_acl.main.arn
+# 3. 버전 관리 활성화 (Result #9 해결)
+resource "aws_s3_bucket_versioning" "waf_logs_versioning" {
+  bucket = aws_s3_bucket.waf_logs.id
+  versioning_configuration {
+    status = "Enabled"
+  }
+}
+
+# 4. 액세스 로깅 활성화 (Result #8 해결)
+# 실제 프로젝트에서는 별도의 로깅 전용 버킷을 지정하는 것이 좋으나, 우선 자기 자신으로 설정
+resource "aws_s3_bucket_logging" "waf_logs_logging" {
+  bucket = aws_s3_bucket.waf_logs.id
+
+  target_bucket = aws_s3_bucket.waf_logs.id
+  target_prefix = "log/"
 }
