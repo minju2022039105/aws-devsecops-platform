@@ -1,32 +1,49 @@
 resource "aws_vpc" "main" {
   cidr_block           = "10.0.0.0/16"
   enable_dns_hostnames = true
-  tags = {
-    Name = "devsecops-vpc"
+  enable_dns_support   = true
+  tags = { Name = "devsecops-vpc" }
+}
+
+resource "aws_subnet" "public" {
+  vpc_id                  = aws_vpc.main.id
+  cidr_block              = "10.0.1.0/24"
+  availability_zone       = "us-east-1a"
+  map_public_ip_on_launch = true
+  tags = { Name = "devsecops-public-1a" }
+}
+
+resource "aws_internet_gateway" "igw" {
+  vpc_id = aws_vpc.main.id
+  tags = { Name = "devsecops-igw" }
+}
+
+resource "aws_route_table" "public" {
+  vpc_id = aws_vpc.main.id
+  route {
+    cidr_block = "0.0.0.0/0"
+    gateway_id = aws_internet_gateway.igw.id
   }
 }
 
-# VPC Flow Logs 설정 (CloudWatch Logs로 전송)
-resource "aws_cloudwatch_log_group" "vpc_flow_log_group" {
-  name = "/aws/vpc/devsecops-flow-logs"
+resource "aws_route_table_association" "public" {
+  subnet_id      = aws_subnet.public.id
+  route_table_id = aws_route_table.public.id
 }
 
-resource "aws_iam_role" "vpc_flow_log_role" {
-  name = "vpc-flow-log-role"
-
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [{
-      Action = "sts:AssumeRole"
-      Effect = "Allow"
-      Principal = { Service = "vpc-flow-logs.amazonaws.com" }
-    }]
-  })
-}
-
-resource "aws_flow_log" "main" {
-  iam_role_arn    = aws_iam_role.vpc_flow_log_role.arn
-  log_destination = aws_cloudwatch_log_group.vpc_flow_log_group.arn
-  traffic_type    = "ALL"
-  vpc_id          = aws_vpc.main.id
+resource "aws_security_group" "main_sg" {
+  name        = "devsecops-main-sg"
+  vpc_id      = aws_vpc.main.id
+  ingress {
+    from_port   = 22
+    to_port     = 22
+    protocol    = "tcp"
+    cidr_blocks = ["49.143.64.148/32"] # 실무에선 본인 IP만 허용하는 게 좋습니다.
+  }
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["49.143.64.148/32"]
+  }
 }
