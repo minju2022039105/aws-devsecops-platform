@@ -48,3 +48,26 @@ resource "aws_s3_bucket_logging" "waf_logs_logging" {
   target_bucket = aws_s3_bucket.waf_logs.id
   target_prefix = "log/"
 }
+
+# 5. 진짜 WAF Web ACL 생성 (이게 있어야 검문소가 생깁니다!)
+resource "aws_wafv2_web_acl" "main" {
+  name        = "devsecops-waf"
+  description = "WAF for ALB"
+  scope       = "REGIONAL" # ALB용은 REGIONAL로 설정해야 합니다.
+
+  default_action {
+    allow {} # 기본적으로 모든 접속 허용 (나중에 규칙 추가 가능)
+  }
+
+  visibility_config {
+    cloudwatch_metrics_enabled = true
+    metric_name                = "devsecopsWAF"
+    sampled_requests_enabled   = true
+  }
+}
+
+# 6. WAF 로깅 설정 (방금 만든 S3 버킷과 WAF를 연결)
+resource "aws_wafv2_web_acl_logging_configuration" "main" {
+  resource_arn            = aws_wafv2_web_acl.main.arn
+  log_destination_configs = [aws_s3_bucket.waf_logs.arn] # 위에서 만든 버킷 ARN
+}

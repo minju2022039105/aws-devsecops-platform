@@ -20,8 +20,8 @@ resource "aws_iam_policy" "s3_access_policy" {
       Action   = ["s3:GetObject", "s3:ListBucket", "s3:PutObject"]
       Effect   = "Allow"
       Resource = [
-        "arn:aws:s3:::aws-waf-logs-minju-source-2026",
-        "arn:aws:s3:::aws-waf-logs-minju-source-2026/*"
+        "arn:aws:s3:::aws-waf-logs-minju-0417-project",
+        "arn:aws:s3:::aws-waf-logs-minju-0417-project/*"
       ]
     }]
   })

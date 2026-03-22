@@ -72,3 +72,37 @@ resource "local_file" "private_key" {
   content  = tls_private_key.rsa.private_key_pem
   filename = "my-key.pem"
 }
+
+# 4. 탄력적 IP (EIP) 할당: 인스턴스에 고정 IP 부여
+resource "aws_eip" "analysis_node_eip" {
+  instance = aws_instance.security_node.id # 위에서 정의한 security_node와 연결
+  domain   = "vpc"
+
+  tags = {
+    Name = "DevSecOps-Fixed-IP"
+  }
+}
+
+# 5. 최종 접속 IP 출력 (기존 instance_public_ip 출력문이 있다면 이걸로 대체하세요)
+output "fixed_public_ip" {
+  description = "접속에 사용할 고정 IP 주소입니다."
+  value       = aws_eip.analysis_node_eip.public_ip
+}
+
+# 6. 방금 만든 alb 모듈을 불러오고, WAF와 연결
+module "alb" {
+  source         = "./alb"
+  # module "vpc"가 아니라 위에서 만든 module "network"를 써야 합니다!
+  vpc_id         = module.network.vpc_id 
+  public_subnets = module.network.public_subnet_ids 
+  
+  # module "ec2" 모듈이 아니라 직접 만든 resource "aws_instance"의 ID를 씁니다!
+  instance_id    = aws_instance.security_node.id 
+}
+
+# ⭐ WAF와 ALB를 실제 연결하는 코드
+resource "aws_wafv2_web_acl_association" "main" {
+  resource_arn = module.alb.alb_arn
+  # module "security"라는 이름으로 불러오셨으니 이름을 맞춥니다!
+  web_acl_arn  = module.security.web_acl_arn 
+}
