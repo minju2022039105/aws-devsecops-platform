@@ -49,14 +49,54 @@ resource "aws_s3_bucket_logging" "waf_logs_logging" {
   target_prefix = "log/"
 }
 
-# 5. 진짜 WAF Web ACL 생성 (이게 있어야 검문소가 생깁니다!)
+# 5. 진짜 WAF Web ACL 생성 (규칙 추가 버전!)
 resource "aws_wafv2_web_acl" "main" {
   name        = "devsecops-waf"
-  description = "WAF for ALB"
-  scope       = "REGIONAL" # ALB용은 REGIONAL로 설정해야 합니다.
+  description = "WAF for ALB with Managed Rules"
+  scope       = "REGIONAL"
 
   default_action {
-    allow {} # 기본적으로 모든 접속 허용 (나중에 규칙 추가 가능)
+    allow {} 
+  }
+
+  # [규칙 1] 가장 일반적인 웹 공격 방어 (Common Rule Set)
+  rule {
+    name     = "AWS-AWSManagedRulesCommonRuleSet"
+    priority = 1 # 우선순위 1번
+    override_action {
+      none {} # 차단(Block)을 그대로 수행함
+    }
+    statement {
+      managed_rule_group_statement {
+        name        = "AWSManagedRulesCommonRuleSet"
+        vendor_name = "AWS"
+      }
+    }
+    visibility_config {
+      cloudwatch_metrics_enabled = true
+      metric_name                = "awsCommonRules"
+      sampled_requests_enabled   = true
+    }
+  }
+
+  # [규칙 2] SQL 인젝션 방어 (SQLi Rule Set)
+  rule {
+    name     = "AWS-AWSManagedRulesSQLiRuleSet"
+    priority = 2 # 우선순위 2번
+    override_action {
+      none {}
+    }
+    statement {
+      managed_rule_group_statement {
+        name        = "AWSManagedRulesSQLiRuleSet"
+        vendor_name = "AWS"
+      }
+    }
+    visibility_config {
+      cloudwatch_metrics_enabled = true
+      metric_name                = "awsSQLiRules"
+      sampled_requests_enabled   = true
+    }
   }
 
   visibility_config {
