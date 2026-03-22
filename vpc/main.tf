@@ -32,14 +32,26 @@ resource "aws_route_table_association" "public" {
 }
 
 resource "aws_security_group" "main_sg" {
-  name        = "devsecops-main-sg"
-  vpc_id      = aws_vpc.main.id
+  name   = "devsecops-main-sg"
+  vpc_id = aws_vpc.main.id
+
+  # SSH 접속용 (기존)
   ingress {
     from_port   = 22
     to_port     = 22
     protocol    = "tcp"
-    cidr_blocks = ["49.143.64.148/32"] # 실무에선 본인 IP만 허용하는 게 좋습니다.
+    cidr_blocks = ["49.143.64.148/32"]
   }
+
+  # ⭐️ Grafana 접속용 (추가)
+  ingress {
+    from_port   = 3000
+    to_port     = 3000
+    protocol    = "tcp"
+    cidr_blocks = ["49.143.64.148/32"] 
+    description = "Allow Grafana access"
+  }
+
   egress {
     from_port   = 0
     to_port     = 0
