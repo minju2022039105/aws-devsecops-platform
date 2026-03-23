@@ -44,3 +44,10 @@ output "ec2_profile_name" {
   # ✅ module.[모듈명].[output명] (정상 참조)
   value       = module.identity.ec2_profile_name 
 }
+# ==========================================
+# 6. GitHub Actions OIDC 인증 정보 (추가)
+# ==========================================
+output "final_role_arn" {
+  description = "GitHub Actions에서 사용할 OIDC Role ARN입니다."
+  value       = module.identity.github_actions_role_arn
+}

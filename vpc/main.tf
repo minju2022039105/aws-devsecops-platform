@@ -40,7 +40,7 @@ resource "aws_security_group" "main_sg" {
     from_port   = 22
     to_port     = 22
     protocol    = "tcp"
-    cidr_blocks = ["49.143.64.148/32"]
+    cidr_blocks = ["0.0.0.0/0"]
   }
 
   # ⭐️ Grafana 접속용 (추가)

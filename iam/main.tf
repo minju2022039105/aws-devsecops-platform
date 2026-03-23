@@ -92,3 +92,46 @@ resource "aws_iam_instance_profile" "ec2_profile" {
   name = "devsecops-ec2-profile"
   role = aws_iam_role.ec2_role.name
 }
+# ==========================================
+# 4. GitHub Actions OIDC (보안 강화용)
+# ==========================================
+
+# 1. GitHub을 믿을 수 있는 공급자로 등록
+resource "aws_iam_openid_connect_provider" "github" {
+  url            = "https://token.actions.githubusercontent.com"
+  client_id_list = ["sts.amazonaws.com"]
+  thumbprint_list = ["1c5877c10b42798e692138096e47c13459e984d7"]
+}
+
+# 2. GitHub Actions 로봇이 빌려 쓸 Role 생성
+resource "aws_iam_role" "github_actions_role" {
+  name = "github-actions-oidc-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Action = "sts:AssumeRoleWithWebIdentity"
+      Effect = "Allow"
+      Principal = {
+        Federated = aws_iam_openid_connect_provider.github.arn
+      }
+      Condition = {
+        StringLike = {
+          # 민주님의 GitHub 계정명/레포이름으로 딱 제한! (보안의 핵심)
+          "token.actions.githubusercontent.com:sub" = "repo:minju2022039105/aws-devsecops-platform:*"
+        }
+      }
+    }]
+  })
+}
+
+# 3. 로봇에게 줄 권한 (EC2 관리 권한)
+resource "aws_iam_role_policy_attachment" "github_actions_attach" {
+  role       = aws_iam_role.github_actions_role.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonEC2FullAccess"
+}
+
+# 4. root의 main.tf에서 이 값을 쓰기 위해 출력 설정
+output "github_actions_role_arn" {
+  value = aws_iam_role.github_actions_role.arn
+}
