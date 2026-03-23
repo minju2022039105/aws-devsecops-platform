@@ -1,0 +1,32 @@
+name: Deploy to EC2
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ubuntu
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            # EC2의 진짜 경로로 이동
+            cd /home/ubuntu/Security-AIOps-IsolationForest/monitor
+            
+            # 최신 코드 땡겨오기
+            git pull origin main
+            
+            # 가상환경 활성화 (상위 폴더에 있는 venv 사용)
+            source ../venv/bin/activate
+            
+            # 의존성 설치
+            pip install -r ../requirements.txt || pip install -r requirements.txt
+            
+            # 기존 프로세스 죽이고 다시 살리기
+            pkill -f monitor.py || true
+            nohup python3 monitor.py > monitor.log 2>&1 &
